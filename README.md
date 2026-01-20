@@ -60,7 +60,7 @@
     <div class="scroll-container p-3">
         <header class="mb-4 flex justify-between items-center bg-white/95 p-3 rounded-lg border-b-2 border-slate-900 shadow-lg">
             <div>
-                <h1 class="font-black text-xl italic uppercase text-slate-900 leading-none">PPTH APP</h1>
+                <h1 class="font-black text-xl italic uppercase text-slate-900 leading-none">House M.D. Office</h1>
                 <p id="leg-status" class="text-[8px] font-bold text-blue-600 uppercase tracking-widest italic">Pain: OK</p>
             </div>
             <div class="text-right">
