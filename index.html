@@ -11,78 +11,130 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="迪士尼醫院">
+
     <style>
-        /* 基礎佈局 */
-        body { margin: 0; font-family: sans-serif; background: #1a1a1a; overflow: hidden; }
-        #game-container { width: 100vw; height: 100vh; position: relative; }
-
-        /* --- 關鍵修正：全覆蓋遮罩 --- */
+        body { 
+            font-family: 'Noto Sans TC', sans-serif; background: #0f172a;
+            background-image: url('https://i.redd.it/qvqqhsd1fci71.png');
+            background-size: cover; background-position: center; background-attachment: fixed;
+            margin: 0; overflow: hidden; height: 100vh;
+        }
+        body::before { content: ""; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: -1; }
+        
         #modal-overlay {
-            display: none; 
-            position: fixed; 
-            top: 0; left: 0; 
-            width: 100vw; height: 100vh; /* 確保全螢幕遮蔽 */
-            background: rgba(0, 0, 0, 0.6); 
-            backdrop-filter: blur(15px); /* 毛玻璃效果 */
-            -webkit-backdrop-filter: blur(15px);
-            z-index: 9999; /* 最高的層級 */
-            justify-content: center;
-            align-items: center;
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: calc(100vh - 100px);
+            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            background: rgba(0, 0, 0, 0.4); z-index: 50;
         }
 
-        /* 病歷卡片 */
-        #patient-modal {
-            background: #fff;
-            width: 90%;
-            max-width: 450px;
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-            margin-bottom: 140px; /* 避開底部 UI 的預留空間 */
-            position: relative;
+        .grid-container { flex: 1; display: flex; align-items: center; justify-content: center; padding: 10px; }
+        .patient-grid { 
+            display: grid; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(7, 1fr);
+            gap: 25px 35px; width: fit-content; margin: 0 auto;
         }
 
-        .close-btn {
-            position: absolute; top: 15px; right: 15px;
-            border: none; background: #eee; border-radius: 50%;
-            width: 30px; height: 30px; cursor: pointer;
+        .avatar-circle { 
+            width: 65px; height: 65px; border-radius: 50%; overflow: hidden; 
+            border: 2px solid rgba(255,255,255,0.6); box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            cursor: pointer; transition: 0.2s;
         }
 
-        /* 底部 UI 欄位 */
-        #bottom-ui {
-            position: fixed; bottom: 0; width: 100%; height: 140px;
-            background: #222; color: white; display: flex; align-items: center;
-            justify-content: space-around; z-index: 100;
+        #diagnosis-card {
+            display: none; position: fixed; top: calc(50% - 70px); left: 50%; transform: translate(-50%, -50%);
+            width: 90%; max-width: 550px; background: rgba(255, 255, 255, 0.4); 
+            border-radius: 30px; border: 1px solid rgba(255,255,255,0.4);
+            padding: 35px; z-index: 100; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
+           @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+           @keyframes scan { 
+           0% { left: -50px; } 
+           100% { left: 200px; } 
+        }
+
+/* 讓主畫面一開始先藏起來，等診斷完再出現（可選） */
+.main-content-fade { animation: fadeIn 2s forwards; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        #clinic-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: calc(100vh - 140px);
+            background: rgba(15, 23, 42, 0.95); z-index: 200; flex-direction: column; align-items: center; justify-content: center;
+        }
+        #timer-bar { position: fixed; top: 0; left: 0; width: 100%; height: 6px; background: #fbbf24; transition: width 5s linear; }
+        
+        /* 移動平滑度調回 1s 線性 */
+        .moving-patient { position: absolute; transition: all 1s linear; cursor: pointer; z-index: 202; }
+
+        #house-footer {
+            height: 140px; background: rgba(15, 23, 42, 0.98);
+            border-top: 1px solid rgba(255,255,255,0.2); padding: 20px; z-index: 201; position: relative;
+        }
+
+        .av-t { height: 45%; width: 100%; }
+        .av-b { height: 55%; width: 100%; }
+        .info-label { color: rgba(255,255,255,0.7); font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
+        .info-value { color: white; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
     </style>
 </head>
-<body>
-
-<div id="game-container">
-    <div id="patient-list"></div>
-
-    <div id="bottom-ui">
-        <div>總病患數: <span id="count">68</span></div>
-        <button onclick="alert('豪斯正在看影集，別吵他')">呼叫診斷小組</button>
+<body onclick="closeAll()">
+    <div id="loading-screen" style="position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 1s ease-out;">
+    <div style="color: #3b82f6; font-family: monospace; font-size: 24px; font-weight: bold; letter-spacing: 5px; text-transform: uppercase; animation: blink 1.5s infinite;">
+        Diagnosing...
+    </div>
+    <div style="width: 200px; height: 2px; background: #1e293b; margin-top: 20px; position: relative; overflow: hidden;">
+        <div style="position: absolute; width: 50px; height: 100%; background: #3b82f6; animation: scan 2s linear infinite;"></div>
     </div>
 </div>
+    <div id="modal-overlay"></div>
 
-<div id="modal-overlay" onclick="closeModal()">
-    <div id="patient-modal" onclick="event.stopPropagation()">
-        <button class="close-btn" onclick="closeModal()">✕</button>
-        <h2 id="m-name">病人姓名</h2>
-        <hr>
-        <p><strong>來源：</strong><span id="m-from"></span></p>
-        <p><strong>症狀：</strong><span id="m-symptom"></span></p>
-        <div style="background: #f0f0f0; padding: 15px; border-radius: 10px;">
-            <p><strong>診斷 (豪斯)：</strong><span id="m-diag"></span></p>
-            <p style="color: #d11;"><strong>備註：</strong><span id="m-note"></span></p>
+    <div id="clinic-overlay" onclick="event.stopPropagation()">
+        <div id="timer-bar"></div>
+        <div id="game-arena" class="relative w-full h-full overflow-hidden"></div>
+        <div id="order-hint" class="absolute bottom-10 text-white font-black tracking-widest bg-blue-600/50 px-4 py-2 rounded-full"></div>
+    </div>
+
+    <div id="diagnosis-card" onclick="event.stopPropagation()">
+        <div class="flex gap-8 items-start">
+            <div class="flex flex-col items-center w-36 shrink-0">
+                <div id="card-avatar" class="w-28 h-28 rounded-full border-4 border-white overflow-hidden shadow-2xl mb-4"></div>
+                <h2 id="card-name" class="text-white font-black text-center text-xl tracking-tighter uppercase leading-tight"></h2>
+            </div>
+            <div class="flex-1">
+                <div class="grid grid-cols-2 gap-x-6">
+                    <div>
+                        <div class="info-label">Age</div><div id="v-age" class="info-value"></div>
+                        <div class="info-label">Gender</div><div id="v-gender" class="info-value"></div>
+                        <div class="info-label">Origin</div><div id="v-origin" class="info-value"></div>
+                    </div>
+                    <div>
+                        <div class="info-label">Priority</div><div id="v-urgent" class="info-value font-black"></div>
+                    </div>
+                </div>
+                <div class="mt-3 pt-3 border-t border-white/20">
+                    <div class="info-label">Chief Complaint</div>
+                    <p id="v-symptom" class="text-white text-sm font-bold italic leading-relaxed"></p>
+                </div>
+            </div>
         </div>
     </div>
-</div>
 
-<script>
-    const patientsData = [
+    <div class="h-screen flex flex-col">
+        <header class="pt-8 pb-2 text-center"><h1 class="text-white font-black text-lg italic tracking-[0.4em] uppercase opacity-50">House Office - Diagnostic Kingdom</h1></header>
+        <div class="grid-container" onclick="event.stopPropagation()"><div id="grid" class="patient-grid"></div></div>
+        <footer id="house-footer" onclick="event.stopPropagation()">
+            <div class="max-w-3xl mx-auto flex gap-6 items-center h-full">
+                <div class="flex-1">
+                    <span id="speaker-tag" class="text-blue-500 font-black text-[11px] italic tracking-widest uppercase">G. House, M.D.</span>
+                    <p id="house-msg" class="text-white text-base font-bold italic mt-1 leading-tight">「所有人都在說謊。」</p>
+                </div>
+                <div class="w-20 h-20 rounded-full overflow-hidden border-2 border-blue-500 shrink-0">
+                    <div class="bg-slate-500 h-[45%]"></div><div class="bg-slate-800 h-[55%]"></div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+     const patientsData = [
+      // --- 王室與公主陣營 ---
     { name: "愛麗絲", dept: "神經內科", age: 12, sex: "F", from: "UK", urgent: "中等", symptom: "感知體型異常縮放。", top: "#84C1FF", bottom: "#ffffff", cases: [{d:"夢遊仙境症候群(AIWS)", h:"視覺中樞放電異常。"}] },
     { name: "白雪", dept: "毒物科", age: 17, sex: "F", from: "Germany", urgent: "緊急", symptom: "深度假死昏迷。", top: "#FFFF37", bottom: "#0000E3", cases: [{d:"有機磷中毒", h:"誤食劇毒蘋果，不要信那些有機農作物!"}] },
     { name: "貝兒", dept: "心理科", age: 22, sex: "F", from: "France", urgent: "普通", symptom: "強烈的依戀感。", top: "#FFFFAA", bottom: "#FFE153", cases: [{d:"斯德哥爾摩", h:"心理創傷導致依賴。"}] },
@@ -162,26 +214,138 @@
     { name: "糊塗蛋", dept: "小兒神經科", age: 12, sex: "M", from: "Germany", urgent: "中等", symptom: "喪失語言，大耳畸形。", top: "#DAB1D5", bottom: "#CDCD9A", cases: [{d:"脆性X症", h:"發育遲緩。"}] },
 ];
 
-    function showPatient(name) {
-        const p = patientsData.find(x => x.name === name);
-        if(!p) return;
-        
-        document.getElementById('m-name').innerText = p.name + " (" + p.age + "歲)";
-        document.getElementById('m-from').innerText = p.from;
-        document.getElementById('m-symptom').innerText = p.symptom;
-        document.getElementById('m-diag').innerText = p.cases[0].d;
-        document.getElementById('m-note').innerText = p.cases[0].h;
-        
-        document.getElementById('modal-overlay').style.display = 'flex';
-    }
+        const team = [
+            { n: "FOREMAN", s: "「我覺得是紅斑性狼瘡。」", r: "永遠不是狼瘡。", m: "佛曼不屑地處理了一個。", c: "#6366f1", p: 1 },
+            { n: "CAMERON", s: "「可能是自體免疫問題？」", r: "妳的同情心治不好他。", m: "卡麥蓉接走了一個病人。", c: "#10b981", p: 1 },
+            { n: "CHASE", s: "「檢查過環境毒素了嗎？」", r: "澳洲天才，你真聰明。", m: "柴斯搞定了報告。", c: "#f59e0b", p: 1 },
+            { n: "WILSON", s: "「他只是需要休息。」", r: "威爾森，去陪你的癌症病人。", m: "威爾森清空了所有門診！", c: "#ec4899", p: 3 }
+        ];
 
-    function closeModal() {
-        document.getElementById('modal-overlay').style.display = 'none';
-    }
-</script>
+        const cuddyAngry = ["「豪斯！我要把你的電視搬走！」", "「我要把你的車位移到E區！」", "「我要禁止藥房開給你維柯丁！」"];
 
+        let clinicStep = 0; let clinicTimer; let moveInterval;
+
+        function init() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            patientsData.forEach(p => {
+                const div = document.createElement('div');
+                div.className = "avatar-circle";
+                div.style.backgroundColor = p.bottom;
+                div.innerHTML = `<div class="av-t" style="background:${p.top}"></div><div class="av-b"></div>`;
+                div.onclick = (e) => {
+                    e.stopPropagation();
+                    if (Math.random() < 0.25) { startClinic(); return; } 
+                    selectPatient(p);
+                };
+                grid.appendChild(div);
+            });
+        }
+
+        function selectPatient(p) {
+            document.getElementById('modal-overlay').style.display = 'block';
+            document.getElementById('card-name').innerText = p.name;
+            document.getElementById('v-age').innerText = p.age;
+            document.getElementById('v-gender').innerText = p.sex;
+            document.getElementById('v-origin').innerText = p.from;
+            document.getElementById('v-urgent').innerText = p.urgent;
+            document.getElementById('v-urgent').style.color = p.urgent === "緊急" ? "#ff4d4d" : "#fbbf24";
+            document.getElementById('v-symptom').innerText = p.symptom;
+            document.getElementById('card-avatar').style.backgroundColor = p.bottom;
+            document.getElementById('card-avatar').innerHTML = `<div class="av-t" style="background:${p.top}"></div><div class="av-b"></div>`;
+            document.getElementById('diagnosis-card').style.display = 'block';
+
+            const m = team[Math.floor(Math.random() * 3)];
+            setMsg(m.n, m.c, m.s);
+            setTimeout(() => {
+                const c = p.cases[Math.floor(Math.random()*p.cases.length)];
+                setMsg("G. HOUSE, M.D.", "#3b82f6", `「錯！明顯是${c.d}。${m.r}」<br><span class="text-xs text-slate-400">${c.h}</span>`);
+            }, 1500);
+        }
+
+        function startClinic() {
+            const overlay = document.getElementById('clinic-overlay');
+            overlay.style.display = 'flex'; clinicStep = 0;
+            const arena = document.getElementById('game-arena'); arena.innerHTML = '';
+            const shuffle = [...patientsData].sort(() => 0.5 - Math.random()).slice(0, 3);
+            document.getElementById('order-hint').innerText = "目標: " + shuffle.map(p => p.name).join(" > ");
+            
+            const helper = Math.random() < 0.4 ? team[Math.floor(Math.random()*team.length)] : null;
+            if (helper) {
+                setMsg(helper.n, helper.c, helper.m);
+                if (helper.n === "WILSON") { setTimeout(() => endClinic(true), 1200); return; }
+                if (helper.p === 1) clinicStep = 1;
+            }
+
+            shuffle.forEach((p, idx) => {
+                const pDiv = document.createElement('div');
+                pDiv.className = "moving-patient flex flex-col items-center";
+                const startX = Math.random()*70+15;
+                const startY = Math.random()*70+15;
+                pDiv.style.left = startX + "%";
+                pDiv.style.top = startY + "%";
+                pDiv.innerHTML = `<div class="avatar-circle" style="background:${p.bottom}"><div class="av-t" style="background:${p.top}"></div><div class="av-b"></div></div><div class="text-white text-[10px] font-bold mt-1">${p.name}</div>`;
+                if (helper && helper.p === 1 && idx === 0) pDiv.style.opacity = '0.3';
+                pDiv.onclick = (e) => {
+                    e.stopPropagation();
+                    if (p.name === shuffle[clinicStep].name) {
+                        pDiv.style.display = 'none'; clinicStep++;
+                        if (clinicStep >= 3) endClinic(true);
+                    }
+                };
+                arena.appendChild(pDiv);
+            });
+
+            // 調整：每 1000ms 移動「微幅移動 10%」
+            moveInterval = setInterval(() => {
+                arena.querySelectorAll('.moving-patient').forEach(p => {
+                    let currLeft = parseFloat(p.style.left);
+                    let currTop = parseFloat(p.style.top);
+                    // 隨機位移 ±10%
+                    let nextLeft = currLeft + (Math.random() * 20 - 10);
+                    let nextTop = currTop + (Math.random() * 20 - 10);
+                    // 邊界檢查
+                    nextLeft = Math.max(5, Math.min(90, nextLeft));
+                    nextTop = Math.max(5, Math.min(85, nextTop));
+                    p.style.left = nextLeft + "%";
+                    p.style.top = nextTop + "%";
+                });
+            }, 1000);
+
+            const tb = document.getElementById('timer-bar');
+            tb.style.transition = 'none'; tb.style.width = '100%';
+            setTimeout(() => { tb.style.transition = 'width 5s linear'; tb.style.width = '0%'; }, 50);
+            clinicTimer = setTimeout(() => endClinic(false), 5000);
+        }
+
+        function endClinic(win) {
+            clearInterval(moveInterval); clearTimeout(clinicTimer);
+            document.getElementById('clinic-overlay').style.display = 'none';
+            if (win) setMsg("TEAM", "#10b981", "「門診搞定了。」");
+            else setMsg("CUDDY", "#ef4444", cuddyAngry[Math.floor(Math.random()*3)]);
+        }
+
+        function setMsg(s, c, t) {
+            document.getElementById('speaker-tag').innerText = s;
+            document.getElementById('speaker-tag').style.color = c;
+            document.getElementById('house-msg').innerHTML = t;
+        }
+
+        function closeAll() {
+            document.getElementById('modal-overlay').style.display = 'none';
+            document.getElementById('diagnosis-card').style.display = 'none';
+        }
+
+        window.onload = init;
+        // 延遲 2 秒後移除讀取畫面
+    setTimeout(() => {
+        const loader = document.getElementById('loading-screen');
+        loader.style.opacity = '0';
+        setTimeout(() => {
+            loader.style.display = 'none';
+        }, 1000); // 等淡出動畫跑完再徹底消失
+    }, 2000); 
+};
+    </script>
 </body>
-
 </html>
-
-
