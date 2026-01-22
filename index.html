@@ -32,9 +32,13 @@
             padding: 20px 10px; -webkit-overflow-scrolling: touch;
         }
         .patient-grid { 
-            display: grid; grid-template-columns: repeat(4, 1fr); 
-            gap: 15px; width: 100%; max-width: 500px; margin: 0 auto;
-        }
+         display: grid; 
+         grid-template-columns: repeat(4, 1fr); /* 手機版建議 4 欄 */
+         gap: 15px; 
+         width: 100%; 
+         max-width: 500px; 
+         margin: 0 auto; 
+       }
 
         .avatar-circle { 
             width: 60px; height: 60px; border-radius: 50%; overflow: hidden; 
@@ -290,7 +294,7 @@
             clearInterval(moveInterval); clearTimeout(clinicTimer);
             document.getElementById('clinic-overlay').style.display = 'none';
             if (win) setMsg("TEAM", "#10b981", "「門診搞定了。」");
-            else setMsg("CUDDY", "#ef4444", [Math.floor(Math.random()*3)]);
+            else setMsg("CUDDY", "#ef4444", cuddyAngry[Math.floor(Math.random()*3)]);
         }
 
         function setMsg(s, c, t) {
@@ -315,4 +319,5 @@
     </script>
 </body>
 </html>
+
 
